@@ -1,3 +1,20 @@
-# costmap_node:
-#   ros__parameters:
+# more info on YAML configs for ROS2 Params:
+# https://roboticsbackend.com/ros2-yaml-params/
+#
+# The key is the node's runtime name, which robot.launch.py sets to
+# "costmap_node" -- not the "costmap" passed to Node() in C++.
+costmap_node:
+  ros__parameters:
+    # A 20 m x 20 m window at 0.1 m per cell, centred on the robot.
+    resolution: 0.1
+    width: 200
+    height: 200
 
+    # Half the robot's width (1.4 m including wheels). Anything closer than this
+    # to an obstacle is a cell the robot cannot occupy, so it is marked as
+    # dangerous as the obstacle itself.
+    robot_radius: 0.7
+
+    # How far cost spreads past an obstacle. Must exceed robot_radius, or there
+    # is no gradient for the planner to follow away from walls.
+    inflation_radius: 1.5

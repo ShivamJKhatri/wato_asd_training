@@ -1,47 +1,60 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "costmap_node.hpp"
 
-namespace
-{
-// A 20 m x 20 m window at 0.1 m per cell, centred on the robot. The lidar
-// reaches 20 m, but its beams are ~0.5 m apart out there, which draws walls as
-// dotted lines; 10 m is where the returns are still dense enough to be solid.
-// These become ROS parameters in stage 2.
-constexpr double kResolution = 0.1;
-constexpr int kGridWidth = 200;
-constexpr int kGridHeight = 200;
-}  // namespace
-
 CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->get_logger())) {
-  costmap_.initGrid(kResolution, kGridWidth, kGridHeight);
+  // Defaults for a 20 m x 20 m window at 0.1 m per cell, centred on the robot.
+  // params.yaml overrides these at launch; robot_radius and inflation_radius
+  // can also be changed while running.
+  this->declare_parameter("resolution", 0.1);
+  this->declare_parameter("width", 200);
+  this->declare_parameter("height", 200);
+  this->declare_parameter("robot_radius", 0.7);
+  this->declare_parameter("inflation_radius", 1.5);
+
+  costmap_.initGrid(
+    this->get_parameter("resolution").as_double(),
+    static_cast<int>(this->get_parameter("width").as_int()),
+    static_cast<int>(this->get_parameter("height").as_int()));
+
+  costmap_.setInflation(
+    this->get_parameter("robot_radius").as_double(),
+    this->get_parameter("inflation_radius").as_double());
 
   lidar_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
     "/lidar", 10, std::bind(&CostmapNode::lidarCallback, this, std::placeholders::_1));
 
   costmap_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/costmap", 10);
+
+  param_cb_ = this->add_on_set_parameters_callback(
+    std::bind(&CostmapNode::parametersCallback, this, std::placeholders::_1));
 }
 
 void CostmapNode::lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr scan) {
-  // The costmap holds only what this scan sees, so every scan starts clean.
+  // Each scan stands on its own: everything starts free, and only what this
+  // scan actually hits becomes an obstacle.
   costmap_.reset();
 
   for (size_t i = 0; i < scan->ranges.size(); ++i) {
     const float range = scan->ranges[i];
 
-    // Gazebo reports inf for beams that hit nothing, and readings outside the
-    // sensor's own limits are not measurements.
+    // Non-finite covers both inf (the beam hit nothing) and NaN (a broken
+    // reading); neither marks an obstacle.
     if (!std::isfinite(range) || range < scan->range_min || range > scan->range_max) {
       continue;
     }
 
     // Polar to Cartesian, in the lidar's frame: beam i points at angle_min plus
-    // i steps of angle_increment.
+    // i steps of angle_increment. Returns past the window edge are dropped by
+    // the grid's own bounds check.
     const double angle = scan->angle_min + static_cast<double>(i) * scan->angle_increment;
     costmap_.markObstacle(range * std::cos(angle), range * std::sin(angle));
   }
+
+  costmap_.inflate();
 
   costmap_pub_->publish(buildMessage(scan->header));
 }
@@ -65,6 +78,36 @@ nav_msgs::msg::OccupancyGrid CostmapNode::buildMessage(
   msg.data = costmap_.data();
 
   return msg;
+}
+
+rcl_interfaces::msg::SetParametersResult CostmapNode::parametersCallback(
+  const std::vector<rclcpp::Parameter>& parameters) {
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  double robot_radius = this->get_parameter("robot_radius").as_double();
+  double inflation_radius = this->get_parameter("inflation_radius").as_double();
+  bool inflation_changed = false;
+
+  for (const auto & parameter : parameters) {
+    if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) {
+      continue;  // The grid dimensions are fixed once the node is running.
+    }
+
+    if (parameter.get_name() == "robot_radius") {
+      robot_radius = parameter.as_double();
+      inflation_changed = true;
+    } else if (parameter.get_name() == "inflation_radius") {
+      inflation_radius = parameter.as_double();
+      inflation_changed = true;
+    }
+  }
+
+  if (inflation_changed) {
+    costmap_.setInflation(robot_radius, inflation_radius);
+  }
+
+  return result;
 }
 
 int main(int argc, char ** argv)

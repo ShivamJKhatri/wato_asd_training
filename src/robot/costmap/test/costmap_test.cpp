@@ -1,16 +1,19 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 #include "costmap_core.hpp"
 
 namespace
 {
 
-// Matches the node's configuration: a 20 m x 20 m window at 0.1 m per cell, so
-// the robot sits at cell (100, 100) and the grid spans -10 m to +10 m.
-robot::CostmapCore makeCostmap()
+// Matches the node's defaults: a 20 m x 20 m window at 0.1 m per cell, so the
+// robot sits at cell (100, 100) and the grid spans -10 m to +10 m.
+robot::CostmapCore makeCostmap(double robot_radius = 0.7, double inflation_radius = 1.5)
 {
   robot::CostmapCore costmap(rclcpp::get_logger("costmap_test"));
   costmap.initGrid(0.1, 200, 200);
+  costmap.setInflation(robot_radius, inflation_radius);
   return costmap;
 }
 
@@ -69,13 +72,36 @@ TEST(CostmapCoreTest, RejectsPointsJustOutsideTheLowerEdge)
   EXPECT_FALSE(costmap.worldToGrid(0.0, -10.05, x, y));
 }
 
+// The costmap is optimistic by design: space the sensor never saw is reported
+// free, and the map corrects itself as the robot explores. It must never
+// publish UNKNOWN -- that value belongs to map_memory's global map.
+TEST(CostmapCoreTest, StartsEntirelyFree)
+{
+  auto costmap = makeCostmap();
+
+  EXPECT_EQ(cellAt(costmap, 0.0, 0.0), robot::CostmapCore::FREE);
+  EXPECT_EQ(cellAt(costmap, 5.0, -5.0), robot::CostmapCore::FREE);
+  EXPECT_EQ(cellAt(costmap, -9.0, 9.0), robot::CostmapCore::FREE);
+}
+
+TEST(CostmapCoreTest, NeverPublishesUnknownCells)
+{
+  auto costmap = makeCostmap();
+  costmap.markObstacle(2.0, 0.0);
+  costmap.inflate();
+
+  for (const int8_t value : costmap.data()) {
+    ASSERT_NE(value, robot::CostmapCore::UNKNOWN);
+  }
+}
+
 TEST(CostmapCoreTest, MarksTheCellContainingTheObstacle)
 {
   auto costmap = makeCostmap();
   costmap.markObstacle(1.0, 2.0);
 
   EXPECT_EQ(cellAt(costmap, 1.0, 2.0), robot::CostmapCore::LETHAL);
-  EXPECT_EQ(cellAt(costmap, -1.0, -2.0), robot::CostmapCore::FREE);
+  EXPECT_EQ(cellAt(costmap, -5.0, -5.0), robot::CostmapCore::FREE);
 }
 
 TEST(CostmapCoreTest, IgnoresObstaclesOutsideTheWindow)
@@ -89,7 +115,7 @@ TEST(CostmapCoreTest, IgnoresObstaclesOutsideTheWindow)
   EXPECT_EQ(cellAt(costmap, 0.0, 0.0), robot::CostmapCore::FREE);
 }
 
-TEST(CostmapCoreTest, ResetClearsMarkedCells)
+TEST(CostmapCoreTest, ResetClearsBackToFree)
 {
   auto costmap = makeCostmap();
   costmap.markObstacle(1.0, 2.0);
@@ -98,4 +124,55 @@ TEST(CostmapCoreTest, ResetClearsMarkedCells)
   costmap.reset();
 
   EXPECT_EQ(cellAt(costmap, 1.0, 2.0), robot::CostmapCore::FREE);
+}
+
+TEST(CostmapCoreTest, InflationFadesWithDistance)
+{
+  auto costmap = makeCostmap(0.7, 1.5);
+  costmap.markObstacle(2.0, 0.0);
+  costmap.inflate();
+
+  const int8_t near_cost = cellAt(costmap, 2.0, 0.4);   // inside robot_radius
+  const int8_t far_cost = cellAt(costmap, 2.0, 1.2);    // out in the fade
+
+  EXPECT_EQ(cellAt(costmap, 2.0, 0.0), robot::CostmapCore::LETHAL);
+  EXPECT_EQ(near_cost, robot::CostmapCore::INSCRIBED);
+  EXPECT_GT(far_cost, 0);
+  EXPECT_LT(far_cost, near_cost);
+}
+
+TEST(CostmapCoreTest, InflationStopsAtTheRadius)
+{
+  auto costmap = makeCostmap(0.7, 1.5);
+  costmap.markObstacle(2.0, 0.0);
+  costmap.inflate();
+
+  // 4.0 m is 2.0 m past the obstacle, outside the 1.5 m disc.
+  EXPECT_EQ(cellAt(costmap, 4.0, 0.0), robot::CostmapCore::FREE);
+}
+
+TEST(CostmapCoreTest, InflationNeverLowersAnExistingCost)
+{
+  auto costmap = makeCostmap(0.7, 1.5);
+
+  // Two obstacles 1 m apart: the cells between them are inside both discs and
+  // must end up with the higher of the two costs.
+  costmap.markObstacle(2.0, 0.0);
+  costmap.markObstacle(3.0, 0.0);
+  costmap.inflate();
+
+  EXPECT_EQ(cellAt(costmap, 2.5, 0.0), robot::CostmapCore::INSCRIBED);
+}
+
+// Inflation reads the grid while writing to it, so a freshly stamped cost must
+// not be mistaken for an obstacle and seed a second round of spreading.
+TEST(CostmapCoreTest, InflationDoesNotCascade)
+{
+  auto costmap = makeCostmap(0.7, 1.5);
+  costmap.markObstacle(0.0, 0.0);
+  costmap.inflate();
+
+  // 2.0 m out is well past the 1.5 m disc; a cascade would have reached it.
+  EXPECT_EQ(cellAt(costmap, 2.0, 0.0), robot::CostmapCore::FREE);
+  EXPECT_EQ(cellAt(costmap, 0.0, -2.0), robot::CostmapCore::FREE);
 }
