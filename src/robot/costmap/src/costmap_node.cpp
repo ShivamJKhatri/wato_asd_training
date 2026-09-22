@@ -14,7 +14,6 @@ CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->
   this->declare_parameter("height", 200);
   this->declare_parameter("robot_radius", 0.7);
   this->declare_parameter("inflation_radius", 1.5);
-
   costmap_.initGrid(
     this->get_parameter("resolution").as_double(),
     static_cast<int>(this->get_parameter("width").as_int()),

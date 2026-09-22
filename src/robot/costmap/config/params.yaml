@@ -18,3 +18,4 @@ costmap_node:
     # How far cost spreads past an obstacle. Must exceed robot_radius, or there
     # is no gradient for the planner to follow away from walls.
     inflation_radius: 1.5
+

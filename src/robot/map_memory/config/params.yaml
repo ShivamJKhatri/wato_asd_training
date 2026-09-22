@@ -1,3 +1,25 @@
-# map_memory_node:
-#   ros__parameters:
-    
+# more info on YAML configs for ROS2 Params:
+# https://roboticsbackend.com/ros2-yaml-params/
+#
+# The key is the node's runtime name, which robot.launch.py sets to
+# "map_memory_node" -- not the "map_memory" passed to Node() in C++.
+map_memory_node:
+  ros__parameters:
+    # The whole 30 m x 30 m room, anchored at the world origin. Unlike the
+    # costmap, this grid never moves.
+    resolution: 0.2
+    width: 150
+    height: 150
+    origin_x: -15.0
+    origin_y: -15.0
+    global_frame: "sim_world"
+
+    # Coarser than the costmap's 0.1 m on purpose: about four costmap cells
+    # land in each map cell, so rotating the costmap cannot leave holes.
+
+    # How far the robot must travel before the next fusion.
+    update_distance: 1.5
+
+    # ...or how far it must turn. The costmap rotates with the robot, so a spin
+    # in place reveals a whole new view at zero distance travelled.
+    update_angle: 0.5

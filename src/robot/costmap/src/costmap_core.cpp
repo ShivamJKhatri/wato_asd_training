@@ -151,9 +151,10 @@ void CostmapCore::inflate()
         continue;
       }
 
-      // Never lower a cost: where two discs overlap, the higher one wins, so a
-      // cell between two obstacles is as dangerous as the nearer one makes it.
       int8_t & cell = at(gx, gy);
+
+      // Never lower a cost: where two discs overlap the higher one wins, so a
+      // cell between two obstacles is as dangerous as the nearer one makes it.
       if (cell < offset.cost) {
         cell = offset.cost;
       }

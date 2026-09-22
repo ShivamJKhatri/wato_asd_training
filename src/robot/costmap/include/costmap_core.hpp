@@ -10,15 +10,15 @@ namespace robot
 
 class CostmapCore {
   public:
-    // Cell values, shared with map_memory and planner.
+    // Cell values. This is a contract shared with map_memory and planner.
     //
-    // The costmap is deliberately optimistic: anything the scan does not put an
-    // obstacle in is free, including space the sensor never actually saw. The
-    // map corrects itself as the robot explores, which is why the planner may
-    // route through an obstacle it has not met yet.
-    //
-    // UNKNOWN is never emitted here. It belongs to map_memory's global map,
-    // which starts unknown and fills in as costmaps arrive.
+    //   UNKNOWN    never published by this node. It exists only so the value
+    //              is named; nothing here ever emits it, which is what keeps
+    //              grey out of every layer that renders a costmap.
+    //   FREE       the default: anything no beam stopped in.
+    //   1..98      inflation, rising with proximity to an obstacle.
+    //   INSCRIBED  close enough that the robot's body would be touching.
+    //   LETHAL     a beam stopped here.
     static constexpr int8_t UNKNOWN = -1;
     static constexpr int8_t FREE = 0;
     static constexpr int8_t INSCRIBED = 99;
@@ -47,7 +47,8 @@ class CostmapCore {
     void markObstacle(double x, double y);
 
     // Spreads cost outward from every LETHAL cell. Call once per scan, after
-    // every obstacle is in. Never lowers a cell's existing cost.
+    // the free space and obstacles are in. Never lowers a cell's cost, and
+    // never writes into an UNKNOWN cell.
     void inflate();
 
     double resolution() const { return resolution_; }

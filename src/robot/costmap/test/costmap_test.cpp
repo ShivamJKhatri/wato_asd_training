@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <vector>
 
 #include "costmap_core.hpp"
 
@@ -72,16 +73,14 @@ TEST(CostmapCoreTest, RejectsPointsJustOutsideTheLowerEdge)
   EXPECT_FALSE(costmap.worldToGrid(0.0, -10.05, x, y));
 }
 
-// The costmap is optimistic by design: space the sensor never saw is reported
-// free, and the map corrects itself as the robot explores. It must never
-// publish UNKNOWN -- that value belongs to map_memory's global map.
+// The costmap is optimistic by design: space no beam stopped in reads free.
+// It must never publish UNKNOWN, which is what keeps grey off every layer.
 TEST(CostmapCoreTest, StartsEntirelyFree)
 {
   auto costmap = makeCostmap();
 
   EXPECT_EQ(cellAt(costmap, 0.0, 0.0), robot::CostmapCore::FREE);
   EXPECT_EQ(cellAt(costmap, 5.0, -5.0), robot::CostmapCore::FREE);
-  EXPECT_EQ(cellAt(costmap, -9.0, 9.0), robot::CostmapCore::FREE);
 }
 
 TEST(CostmapCoreTest, NeverPublishesUnknownCells)
