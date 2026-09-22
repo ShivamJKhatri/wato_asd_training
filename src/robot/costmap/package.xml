@@ -13,7 +13,11 @@
  
   <!--YOU ARE ADDING THIS MAINLY-->
   <depend>std_msgs</depend>
- 
+
+  <!--Costmap node: LaserScan in, OccupancyGrid out-->
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
