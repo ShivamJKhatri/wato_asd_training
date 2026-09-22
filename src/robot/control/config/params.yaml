@@ -1,3 +1,25 @@
-# control_node:
-#   ros__parameters:
-    
+# more info on YAML configs for ROS2 Params:
+# https://roboticsbackend.com/ros2-yaml-params/
+#
+# The key is the node's runtime name, which robot.launch.py sets to
+# "control_node" -- not the "control" passed to Node() in C++.
+control_node:
+  ros__parameters:
+    # How far along the path to aim. Roughly one second of travel. Raise it if
+    # the robot weaves; lower it if it cuts corners into the inflation the
+    # planner routed around.
+    lookahead: 1.5
+
+    max_linear: 1.3
+    max_angular: 1.5
+
+    # Must match the planner's, or one node thinks it has arrived while the
+    # other keeps replanning.
+    goal_tolerance: 0.5
+
+    # How sharply speed drops as the turn tightens. Higher means slower, tighter
+    # corners; 0 means constant speed, which cuts corners into obstacles.
+    turn_slowdown: 2.0
+
+    # Seconds between commands. 10 Hz.
+    control_period: 0.1

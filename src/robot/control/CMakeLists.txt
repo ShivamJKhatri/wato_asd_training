@@ -13,6 +13,8 @@ endif()
 # Search for dependencies required for building this package
 find_package(ament_cmake REQUIRED) # ROS2 build tool
 find_package(rclcpp REQUIRED)      # ROS2 C++ package
+find_package(nav_msgs REQUIRED)    # Path and Odometry
+find_package(geometry_msgs REQUIRED)  # Twist commands
 
 # Compiles source files into a library
 # A library is not executed, instead other executables can link
@@ -29,7 +31,31 @@ target_include_directories(control_lib
 # Add ROS2 dependencies required by package
 ament_target_dependencies(control_lib
   rclcpp
+  nav_msgs
+  geometry_msgs
 )
+
+option(BUILD_TESTING "Build tests" ON)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_lint_auto REQUIRED)
+  find_package(ament_lint_common REQUIRED)
+
+  list(APPEND AMENT_LINT_AUTO_EXCLUDE
+    ament_cmake_cpplint
+    ament_cmake_copyright)
+
+  ament_cpplint(FILTERS "-legal/copyright")
+
+  ament_lint_auto_find_test_dependencies()
+
+  ament_add_gtest(control_test test/control_test.cpp)
+  target_link_libraries(control_test control_lib)
+
+  install(TARGETS
+    control_test
+    DESTINATION lib/${PROJECT_NAME})
+endif()
 
 # Create ROS2 node executable from source files
 add_executable(control_node src/control_node.cpp)

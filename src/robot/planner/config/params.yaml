@@ -1,3 +1,13 @@
-# planner_node:
-#   ros__parameters:
-    
+# more info on YAML configs for ROS2 Params:
+# https://roboticsbackend.com/ros2-yaml-params/
+#
+# The key is the node's runtime name, which robot.launch.py sets to
+# "planner_node" -- not the "planner" passed to Node() in C++.
+planner_node:
+  ros__parameters:
+    # How close counts as arrived. The path is cleared and control stops.
+    goal_tolerance: 0.5
+
+    # Seconds between replans. Every tick plans from scratch, which is how a
+    # stale path and a changed map are both handled without tracking either.
+    plan_period: 0.5
